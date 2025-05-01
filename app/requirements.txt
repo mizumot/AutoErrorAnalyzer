@@ -1,0 +1,7 @@
+flask
+groq
+pandas
+python-docx
+spacy
+matplotlib
+numpy

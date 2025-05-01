@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Auto Error Analyzer</title>
+    <!-- Bootstrap -->
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+        <!-- css -->
+    <link href="/static/css/style.css" rel="stylesheet">
+    <!-- favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <!-- javascript -->
+    <script type="text/javascript" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+    <!-- Bootstrap JavaScript -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;700&display=swap');
+
+        h1 {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 2.3em;
+            color: #fff;
+            background-image: linear-gradient(135deg, #6e8efb, #a777e3);
+            padding: 12px;
+            border-top: 10px solid #a777e3;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+            border-radius: 10px 10px 0 0;
+        }
+
+        body {
+            background-color: #f0f4f8;
+            font-family: 'Arial', sans-serif;
+        }
+
+
+        .file-input {
+            display: none;
+        }
+        
+        .custom-file-upload {
+            display: inline-block;
+            padding: 6px 12px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f7f7f7;
+        }
+
+        .parent {
+            text-align: center;
+        }
+
+        .file-name {
+            display: inline-block;
+            margin-left: 0px;
+            text-align: left;
+        }
+
+        
+        .data td:nth-child(4) {  /* Error Categories column (fourth column) */
+            text-align: center !important;
+        }
+        .corrected-data-table .data {
+            width: 90%;
+            height: 400px; /* Adjust height for the display area */
+            overflow-y: scroll; /* Add vertical scrollbar */
+            display: block;
+            margin: auto;
+        }
+        .corrected-data-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .corrected-data-table th, .corrected-data-table td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .cool-spinner {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto;
+        }
+
+        .spinner-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            border-top-color: #6e8efb;
+            animation: spin 1.5s linear infinite;
+        }
+
+        .spinner-ring:nth-child(2) {
+            width: 70%;
+            height: 70%;
+            top: 15%;
+            left: 15%;
+            border-top-color: #a777e3;
+            animation-duration: 1.75s;
+            animation-direction: reverse;
+        }
+
+        .spinner-ring:nth-child(3) {
+            width: 40%;
+            height: 40%;
+            top: 30%;
+            left: 30%;
+            border-top-color: #fff;
+            animation-duration: 2s;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .dot-animation {
+            display: inline-block;
+            animation: dots 1.5s infinite;
+            width: 24px;
+            text-align: left;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .error-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            margin: 2px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .error-badge:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .no-error-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            margin: 2px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: normal;
+            color: #28a745;
+            background-color: #f0f8f1;
+            border: 1px solid #28a745;
+        }
+
+    </style>
+
+    <script>
+
+        function animateDots() {
+            const dotElement = document.querySelector('.dot-animation');
+            if (!dotElement) return;
+            
+            let dots = '';
+            let count = 0;
+            
+            setInterval(() => {
+                count = (count + 1) % 4;
+                dots = '.'.repeat(count);
+                dotElement.textContent = dots;
+            }, 500);
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    const textarea = document.getElementById('text');
+                    const fileInput = document.getElementById('fileInput');
+                    
+                    if (!textarea.value.trim() && fileInput.files.length === 0) {
+                        alert("You need to enter text or select a file.");
+                        e.preventDefault();
+                        return false;
+                    }
+                    
+                    document.getElementById('loading-spinner').style.display = 'block';
+                    animateDots();
+                    return true;
+                });
+            }
+        });
+
+        function updateFileName() {
+            var input = document.getElementById('fileInput');
+            var label = document.getElementById('fileNameLabel');
+            var filePath = input.value;
+            var allowedExtensions = /(\.txt|\.docx)$/i;
+
+            if (input.files.length > 0) {
+                if (!allowedExtensions.exec(filePath)) {
+                    alert('Invalid file type. Please upload a .txt or .docx file.');
+                    input.value = '';
+                    label.innerText = "Not Selected";
+                    return false;
+                } else {
+                    label.innerText = input.files[0].name;
+                }
+            } else {
+                label.innerText = "Not Selected";
+            }
+        }
+
+
+        function showSpinner() {
+            document.getElementById('loading-spinner').style.display = 'block';
+        }
+
+
+        const errorCategoryInfo = {
+            "ART":   { description: "Article errors (a, an, the)" },
+            "PREP":  { description: "Preposition errors (in, on, at, by, etc.)" },
+            "NUM":   { description: "Number errors (singular/plural)" },
+            "TENSE": { description: "Verb tense errors (past, present, future)" },
+            "VFORM": { description: "Verb form errors (infinitive, gerund, etc.)" },
+            "WO":    { description: "Word order errors" },
+            "AGR":   { description: "Subject-verb agreement errors" },
+            "DET":   { description: "Determiner errors" },
+            "POSS":  { description: "Possession/belonging errors" },
+            "MOD":   { description: "Modal verb errors" },
+            "CONJ":  { description: "Conjunction errors" },
+            "STRUCT":{ description: "Structural errors" },
+            "N":     { description: "Noun replacement errors" },
+            "ADJ":   { description: "Adjective replacement errors" },
+            "ADV":   { description: "Adverb replacement errors" },
+            "V":     { description: "Verb replacement (meaning change)" },
+            "REF":   { description: "Reference errors (pronouns, demonstratives)" },
+            "EXPR":  { description: "Expression replacement errors" },
+            "SP":    { description: "Spelling errors" },
+            "MIS":   { description: "Missing word errors" },
+            "UNN":   { description: "Unnecessary word errors" },
+            "CWS":   { description: "Compound word spacing errors" },
+            "PUNC":  { description: "Punctuation errors" },
+            "OTHER": { description: "Other errors" }
+        };
+
+
+        function enhanceErrorDisplay() {
+            const errorCells = document.querySelectorAll(
+                '.corrected-data-table table tbody tr td:nth-child(5)'
+            );
+            
+            errorCells.forEach(cell => {
+                // grab the raw text ("PUNC, ART"  or  "PUNC ART")
+                const raw = cell.textContent.trim();
+                if (!raw || raw === 'NO_ERROR') {
+                cell.innerHTML = raw === 'NO_ERROR'
+                    ? '<span class="no-error-badge">NO_ERROR</span>'
+                    : '';
+                return;
+                }
+
+                const codes = raw.split(/[\s,]+/);
+
+                cell.innerHTML = codes.map(code => {
+                const info = errorCategoryInfo[code] || { description: 'Unknown error type' };
+                return `
+                    <span
+                    class="error-badge"
+                    data-description="${info.description}"
+                    data-error-code="${code}"
+                    title="${info.description}"        /* for native/browser tooltip */
+                    data-toggle="tooltip"              /* for Bootstrap tooltip */
+                    >${code}</span>
+                `;
+                }).join(' ');
+
+            });
+
+            if (window.jQuery && typeof jQuery.fn.tooltip === 'function') {
+                jQuery('[data-toggle="tooltip"]').tooltip();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const checkTableInterval = setInterval(function() {
+                const table = document.querySelector('.corrected-data-table table');
+                if (table) {
+                    clearInterval(checkTableInterval);
+                    setTimeout(enhanceErrorDisplay, 500);
+                }
+            }, 200);
+        });
+
+        function initializeErrorDisplay() {
+            setTimeout(enhanceErrorDisplay, 500);
+        }
+
+        window.addEventListener('load', function() {
+            setTimeout(initializeErrorDisplay, 1000);
+        });
+    </script>
+
+</head>
+
+
+<body>
+    <center>
+        <h1>Auto Error Analyzer</h1>
+        <div class="form-group">
+            <form method="POST" action="/" enctype="multipart/form-data">
+                <textarea name="text" id="text" cols="90" rows="13" placeholder="Type or select a file...">{{texts}}</textarea><br>
+
+                <div id="loading-spinner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); z-index: 9999;">
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                        <div class="cool-spinner">
+                            <div class="spinner-ring"></div>
+                            <div class="spinner-ring"></div>
+                            <div class="spinner-ring"></div>
+                        </div>
+                        <div style="margin-top: 25px; color: #fff; font-family: 'Poppins', sans-serif; font-weight: 500; letter-spacing: 1px;">
+                            Analyzing<span class="dot-animation">...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <input class="btn btn-primary" type="submit" value="Analyze" onclick="return verify();">
+
+                <br><br>
+
+                <label class="custom-file-upload">
+                    <input type="file" id="fileInput" name="file" class="file-input" onchange="updateFileName()">
+                    Select File (txt/docx)
+                </label>
+                <span id="fileNameLabel" class="file-name">{% if file_name %}{{ file_name }}{% endif %}</span>
+                <input type="submit" value="Load" class="btn btn-info">
+
+            </form><br>
+
+            {% if e_time %}
+            <font size="3">Process Time: {{e_time}}[s]</font>
+
+            {% endif %}
+        </div>
+        
+        <br>
+
+        <div class="container">
+            {% if e_time %}
+            
+            <!-- Supplementary Metrics Section -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <h4 class="text-center" style="margin-bottom: 20px; color: #444; border-bottom: 2px solid #6e8efb; padding-bottom: 10px;">Supplementary Metrics</h4>
+                </div>
+            </div>
+            
+            <!-- Top row with two columns for Fluency and Complexity -->
+            <div class="row">
+                <!-- Fluency column -->
+                <div class="col-md-6">
+                    <b>Fluency</b>
+                    {% for table in table1 %}
+                        {{ table|safe }}
+                    {% endfor %}
+                </div>
+                
+                <!-- Complexity column -->
+                <div class="col-md-6">
+                    <b>Complexity</b>
+                    {% for table in table2 %}
+                        {{ table|safe }}
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <br>
+            
+            <!-- Accuracy Analysis Section -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h4 class="text-center" style="margin-bottom: 20px; color: #444; border-bottom: 2px solid #a777e3; padding-bottom: 10px;">Error Analysis</h4>
+                </div>
+            </div>
+            
+            <!-- Row for Accuracy section -->
+            <div class="row">
+                <div class="col-12">
+                    <b>Accuracy</b>
+                    {% for table in table3 %}
+                        {{ table|safe }}
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <br>
+            
+            {% for table in table4 %}
+            <div class="corrected-data-table">{{ table|safe }}</div>
+            {% endfor %}
+
+            <script>
+                initializeErrorDisplay();
+            </script>
+        
+            <form action='/downloader'>
+                <input class="btn btn-secondary" name="table" type="submit" value="Download File for Verification" onclick="verify()"/>
+            </form>
+
+            <div class="container" style="text-align: center;"><small>Error analysis was conducted using the 70B-parameter version of the Llama 3 Groq Tool Use model.<br>
+                It is highly recommended that the results ALWAYS be double-checked by humans.</small></div>
+        
+            <br>
+
+            <canvas id="errorTypeChart" style="max-width:900px; height:400px;"></canvas>
+       
+            <!-- Chart.js: build the interactive bar chart -->
+            <script>
+            const rawCounts = {{ error_counts|tojson }};
+
+            const entries = Object.entries(rawCounts)
+                                    .sort((a, b) => b[1] - a[1]);
+
+            const labels = entries.map(e => e[0]);
+            const data   = entries.map(e => e[1]);
+
+            const ctx = document
+                .getElementById('errorTypeChart')
+                .getContext('2d');
+
+            new Chart(ctx, {
+                type: 'horizontalBar',
+                data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Count',
+                    data: data,
+                    backgroundColor: 'rgba(110,142,251,0.7)'
+                }]
+                },
+                options: {
+                tooltips: {
+                    callbacks: {
+                    label: function(tooltipItem, chartData) {
+                        const code = chartData.labels[tooltipItem.index];
+                        const cnt  = chartData.datasets[0].data[tooltipItem.index];
+                        const desc = errorCategoryInfo[code].description;
+                        return `${code} (${cnt}) — ${desc}`;
+                    }
+                    }
+                },
+                scales: {
+                    xAxes: [{
+                    ticks: {
+                        beginAtZero: true,
+                        stepSize: 1
+                    }
+                    }]
+                }
+                }
+            });
+            </script>
+         
+       </div>
+
+        <br>
+        
+    </center>
+
+
+    <center>
+    <hr>
+    <footer>
+        <div class="container" style="color: #333;">
+            <small style="display:block; line-height:1.2;">Version 1.2 (May 1, 2025)</small>
+            <small style="display:block; line-height:1.2;">
+                <a href="https://osf.io/jyf3r/"
+                   class="plain-link"
+                   target="_blank" rel="noopener noreferrer"
+                   style="color:currentColor; text-decoration:none;">
+                    Code
+                </a>
+            </small>
+            <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">
+                <img src="https://creativecommons.jp/wp-content/uploads/2015/04/by-nc-sa.png?w=75">
+            </a>
+        </div>
+    </footer>
+    </center>
+
+    {% endif %}
+    <br>
+
+  
+
+</body>
+</html>
