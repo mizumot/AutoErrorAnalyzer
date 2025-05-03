@@ -481,7 +481,7 @@ def classify_errors_with_llama(corrected_data, model_name="llama-3.3-70b-versati
     except Exception as e:
         print(f"Error initializing Groq client: {e}")
         corrected_data['ErrorCategories'] = corrected_data.apply(
-            lambda row: ', '.join(['OTHER'] * row['Error Counts']) if row['Error Counts'] > 0 else 'NO_ERROR', 
+            lambda row: ', '.join(['OTHER'] * row['ErrorCounts']) if row['ErrorCounts'] > 0 else 'NO_ERROR', 
             axis=1
         )
         return corrected_data
@@ -569,7 +569,7 @@ Specific error: "{error}" => "{correction}"
     pair_indices = []
     
     for idx, row in corrected_data.iterrows():
-        if row['Error Counts'] > 0:
+        if row['ErrorCounts'] > 0:
             original_sentence = row['Sentence']
             corrected_sentence = row['Corrected']
             original_highlighted = row['Highlighted Original']
@@ -694,7 +694,7 @@ def correct_sentences(data):
         data.loc[index, 'Corrected'] = response
         data.loc[index, 'Highlighted Original'] = original_highlighted
         data.loc[index, 'Highlighted Corrected'] = corrected_highlighted
-        data.loc[index, 'Error Counts'] = error_count
+        data.loc[index, 'ErrorCounts'] = error_count
 
         #time.sleep(1)
 
@@ -979,7 +979,7 @@ def home():
     ### Accuracy ###
             data = pd.DataFrame(sentslist, columns=['Sentence'])
             corrected_data = correct_sentences(data)
-            corrected_data['Error Counts'] = corrected_data['Error Counts'].astype(int)
+            corrected_data['ErrorCounts'] = corrected_data['ErrorCounts'].astype(int)
             corrected_data.index = corrected_data.index + 1
 
             corrected_list = corrected_data['Corrected'].tolist()
@@ -1020,18 +1020,18 @@ def home():
 
             output_data['Original'] = corrected_data['Highlighted Original']
             output_data['Corrected'] = corrected_data['Highlighted Corrected']
-            output_data['Error Counts'] = corrected_data['Error Counts'].copy()
+            output_data['ErrorCounts'] = corrected_data['ErrorCounts'].copy()
             output_data['Error Types'] = corrected_data['ErrorCategories']
 
             csv_data.to_csv("static/files/corrected.csv", sep=",", index=False)
 
             total_clauses = corrected_data['Clause counts'].sum()
-            errorfree_sent_count = (corrected_data['Error Counts'] == 0).sum()
+            errorfree_sent_count = (corrected_data['ErrorCounts'] == 0).sum()
             errorfree_t_unit_count = corrected_data['Error-free T-units'].sum()
             errorfree_clause_count = corrected_data['Error-free clauses'].sum()
 
             # (1) Total Errors
-            total_errors = corrected_data['Error Counts'].sum()
+            total_errors = corrected_data['ErrorCounts'].sum()
             # (2) Errors per 100 Words
             errors_per_hundred_words = (total_errors / total_words) * 100
             formatted_errors = format(errors_per_hundred_words, ".2f")
@@ -1117,6 +1117,233 @@ def downloader():
                      mimetype='text/csv',
                      download_name='Downloaded.csv',
                      as_attachment=True)
+
+
+
+@app.route('/batch', methods=['GET', 'POST'])
+def batch_process():
+    if request.method == 'POST':
+        # ファイルが選択されているか確認
+        if 'files[]' not in request.files:
+            return render_template('batch.html', error="ファイルが選択されていません")
+        
+        files = request.files.getlist('files[]')
+        
+        # ファイルが選択されているか確認
+        if not files or files[0].filename == '':
+            return render_template('batch.html', error="ファイルが選択されていません")
+        
+        # 一時フォルダの作成
+        temp_dir = os.path.join(app.static_folder, 'temp')
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # 結果を格納するDataFrame
+        results_df = pd.DataFrame(columns=[
+            'File Name', 'Total Words', 'Number of Types', 'TTR', 'Number of T-units', 
+            'Number of Clauses', 'MLC', 'MLT', 'C/T', 'DC/T', 'Mean Verbal Dependents', 'Mean Nominal Dependents',
+            'Number of Errors', "Errors per 100 words", "Errors per Total Words", "Errors per Sentence", "Errors per T-Unit",
+            "Errors per Clause", "Error-Free Sentences", "Error-Free T-Units", "Error-Free Clauses", 
+            "Error-Free Sentences / Total Sentences", "Error-Free T-Units / Total T-units", "Error-Free Clauses / Total Clauses"
+        ])
+        
+        # 各ファイルを処理
+        for file in files:
+            if not allowed_file(file.filename):
+                continue
+                
+            file_name = sanitize_filename(file.filename)
+            file_path = os.path.join(temp_dir, file_name)
+            file.save(file_path)
+            
+            # ファイルの内容を読み込む
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+            except Exception as e:
+                print(f"Error reading file {file_name}: {str(e)}")
+                # docxの場合
+                try:
+                    document = Document(file_path)
+                    text = "\n".join([para.text for para in document.paragraphs])
+                except Exception as e:
+                    print(f"Error reading docx file {file_name}: {str(e)}")
+                    continue
+            
+            # テキスト処理と分析
+            text = normalize_text(text)
+            
+            # テキストを処理
+            new_row = process_text_for_batch(text, os.path.splitext(file_name)[0])
+            
+            # 結果をDataFrameに追加
+            results_df = pd.concat([results_df, pd.DataFrame([new_row])], ignore_index=True)
+            
+            # 一時ファイルの削除
+            os.remove(file_path)
+        
+        # 結果をCSVファイルとして保存
+        batch_result_path = os.path.join(app.static_folder, 'files', 'batch_result.csv')
+        results_df.to_csv(batch_result_path, index=False)
+        
+        return render_template('batch.html', result=True, file_count=len(files))
+    
+    return render_template('batch.html')
+
+# テキスト処理を行う関数
+def process_text_for_batch(text, file_name):
+    doc = nlp(text)
+    
+    # 文と単語の数を数える
+    num_sentences = len(list(doc.sents))
+    total_words = sum(1 for token in doc if token.pos_ not in ["PUNCT", "SYM", "SPACE", "X"])
+    
+    # Token分析
+    tokens = [token.text.lower() for token in doc if not token.is_punct and not token.is_space]
+    type_count = len(set(tokens))
+    ttr = safe_division(type_count, total_words)
+    
+    # T-unit分析
+    sentslist = [sentence.text for sentence in doc.sents]
+    t_units_list = []
+    clausal_data = []
+    
+    for i in sentslist:
+        t_units = extract_t_units(i)
+        filtered_t_units = [t for t in t_units if t]
+        filtered_t_units = merge_punctuation(filtered_t_units)
+        t_units_list.append(filtered_t_units)
+        
+        # 節分析 - single file modeと同様の処理
+        doc_sent = nlp(i)
+        clause_verbs = extract_verbs(doc_sent)
+        clausal_data.append({"sentence": i, "total_clauses": len(clause_verbs), "clause_verbs": clause_verbs})
+    
+    total_t_units = sum(len(t) for t in t_units_list)
+    
+    # T-unitとclauseの抽出処理
+    matched_t_units = []
+    for t_unit, clause_info in zip(t_units_list, clausal_data):
+        if len(t_unit) == clause_info['total_clauses']:
+            matched_t_units.append(t_unit)
+        elif clause_info['total_clauses'] == 0:
+            matched_t_units.append(t_unit)        
+        else:
+            doc_ci = nlp(clause_info['sentence'])
+            clause_verbs = extract_verbs(doc_ci)
+            extracted_clauses = []
+            clauses = extract_clauses_using_verbs(doc_ci, clause_verbs, extracted_clauses)
+            clauses_refined = refine_clauses(clauses)
+            output_with_missing_part = add_missing_part(clause_info['sentence'], clauses_refined)
+            output_with_missing_part = refine_clauses(output_with_missing_part)
+    
+            if len(output_with_missing_part) == clause_info['total_clauses']:
+                matched_t_units.append(output_with_missing_part)
+    
+    clauses_only = []
+    for t_unit in matched_t_units:
+        clauses_only.append(t_unit)
+    
+    clauses_refined = process_all_sentences(clauses_only)
+    
+    # clauses_refinedの後処理
+    for i in range(len(clauses_refined)):
+        for j in range(len(clauses_refined[i]) - 1):
+            doc_cf = nlp(clauses_refined[i][j])
+            if len(doc_cf) > 0:
+                last_token = doc_cf[-1]
+                
+                if last_token.text.lower() in ["and", "but"] and last_token.pos_ == "CCONJ":
+                    clauses_refined[i][j] = ''.join([token.text_with_ws for token in doc_cf[:-1]]).strip()
+                    clauses_refined[i][j + 1] = f"{last_token.text} {clauses_refined[i][j + 1]}"
+    
+                elif last_token.text.lower() == "as":
+                    clauses_refined[i][j] = ''.join([token.text_with_ws for token in doc_cf[:-1]]).strip()
+                    if j + 1 < len(clauses_refined[i]):
+                        clauses_refined[i][j + 1] = f"as {clauses_refined[i][j + 1]}"
+                    elif i + 1 < len(clauses_refined):
+                        clauses_refined[i + 1].insert(0, f"as {clauses_refined[i + 1][0]}")
+    
+    clauses_refined = [[clause.replace(' ,', ',').replace(' .', '.').replace(' ?', '?').replace(' !', '!') for clause in sublist] for sublist in clauses_refined]
+    
+    # ★ 重要: single file modeと一致させる - clauses_refinedから節の数を計算
+    num_clauses = sum(len(clause) for clause in clauses_refined)
+    
+    # 複雑性指標の計算
+    mlc = safe_division(total_words, num_clauses)
+    mlt = safe_division(total_words, total_t_units)
+    c_t = safe_division(num_clauses, total_t_units)
+    
+    # 統語的複雑さ分析
+    joined_string = " ".join(sentslist)
+    vd_features = calculate_vp_deps(joined_string)
+    dc_t = format(safe_division(vd_features["finite_dep_clause"], total_t_units), ".2f")
+    mvd = format(safe_division(vd_features["vp_deps"], vd_features["finite_clause"]), ".2f")
+    
+    nominal_features = calculate_nominal_deps(joined_string)
+    mnd = format(safe_division(nominal_features["np_deps"], nominal_features["np"]), ".2f")
+    
+    # エラー分析
+    data = pd.DataFrame(sentslist, columns=['Sentence'])
+    corrected_data = correct_sentences(data)
+    corrected_data['ErrorCounts'] = corrected_data['ErrorCounts'].astype(int)
+    corrected_list = corrected_data['Corrected'].tolist()
+    
+    # T-unitとclauseのエラー分析
+    result = check_errors_in_t_units_and_clauses(corrected_list, t_units_list, clauses_refined)
+    
+    # エラー関連の統計計算 
+    # ★ 重要: num_clausesと同じ値を使用
+    total_clauses = num_clauses  
+    errorfree_sent_count = (corrected_data['ErrorCounts'] == 0).sum()
+    errorfree_t_unit_count = sum(result['error_free_t_unit'])
+    errorfree_clause_count = sum(result['error_free_clause'])
+    
+    total_errors = corrected_data['ErrorCounts'].sum()
+    errors_per_hundred_words = (total_errors / total_words) * 100
+    formatted_errors = format(errors_per_hundred_words, ".2f")
+    number_of_errors_per_words = format(safe_division(total_errors, total_words), ".2f")
+    errors_per_sentence = format(safe_division(total_errors, num_sentences), ".2f")
+    number_of_errors_per_t_unit = format(safe_division(total_errors, total_t_units), ".2f")
+    number_of_errors_per_clause = format(safe_division(total_errors, total_clauses), ".2f")
+    error_free_sentence_ratio = format(round(safe_division(errorfree_sent_count, num_sentences), 2), ".2f")
+    error_free_t_unit_ratio = format(round(safe_division(errorfree_t_unit_count, total_t_units), 2), ".2f")
+    error_free_clause_ratio = format(round(safe_division(errorfree_clause_count, total_clauses), 2), ".2f")
+    
+    # 結果を辞書として返す
+    return {
+        'File Name': file_name,
+        'Total Words': total_words,
+        'Number of Types': type_count,
+        'TTR': ttr,
+        'Number of T-units': total_t_units,
+        'Number of Clauses': num_clauses,  # clauses_refinedから計算した値を使用
+        'MLC': mlc,
+        'MLT': mlt,
+        'C/T': c_t,
+        'DC/T': dc_t,
+        'Mean Verbal Dependents': mvd,
+        'Mean Nominal Dependents': mnd,
+        'Number of Errors': total_errors,
+        "Errors per 100 words": formatted_errors,
+        "Errors per Total Words": number_of_errors_per_words,
+        "Errors per Sentence": errors_per_sentence,
+        "Errors per T-Unit": number_of_errors_per_t_unit,
+        "Errors per Clause": number_of_errors_per_clause,
+        "Error-Free Sentences": errorfree_sent_count,
+        "Error-Free T-Units": errorfree_t_unit_count,
+        "Error-Free Clauses": errorfree_clause_count,
+        "Error-Free Sentences / Total Sentences": error_free_sentence_ratio,
+        "Error-Free T-Units / Total T-units": error_free_t_unit_ratio,
+        "Error-Free Clauses / Total Clauses": error_free_clause_ratio
+    }
+
+@app.route('/batch_download')
+def batch_download():
+    return send_file('./static/files/batch_result.csv',
+                     mimetype='text/csv',
+                     download_name='Batch_Results.csv',
+                     as_attachment=True)
+
 
 
 if __name__ == "__main__":
