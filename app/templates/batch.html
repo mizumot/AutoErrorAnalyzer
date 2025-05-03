@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Auto Error Analyzer - Batch Process</title>
+    <!-- Bootstrap -->
+    <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <!-- css -->
+    <link href="/static/css/style.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <!-- favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <!-- javascript -->
+    <script type="text/javascript" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+    <!-- Bootstrap JavaScript -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;700&display=swap');
+
+        h1 {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 2.3em;
+            color: #fff;
+            background-image: linear-gradient(135deg, #6e8efb, #a777e3);
+            padding: 12px;
+            border-top: 10px solid #a777e3;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+            border-radius: 10px 10px 0 0;
+        }
+
+        body {
+            background-color: #f0f4f8;
+            font-family: 'Arial', sans-serif;
+        }
+
+        .cool-spinner {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto;
+        }
+
+        .spinner-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            border-top-color: #6e8efb;
+            animation: spin 1.5s linear infinite;
+        }
+
+        .spinner-ring:nth-child(2) {
+            width: 70%;
+            height: 70%;
+            top: 15%;
+            left: 15%;
+            border-top-color: #a777e3;
+            animation-duration: 1.75s;
+            animation-direction: reverse;
+        }
+
+        .spinner-ring:nth-child(3) {
+            width: 40%;
+            height: 40%;
+            top: 30%;
+            left: 30%;
+            border-top-color: #fff;
+            animation-duration: 2s;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .dot-animation {
+            display: inline-block;
+            animation: dots 1.5s infinite;
+            width: 24px;
+            text-align: left;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+        
+        .upload-zone {
+            border: 2px dashed #6e8efb;
+            border-radius: 5px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+            background-color: #f8f9fa;
+        }
+        
+        .upload-zone:hover {
+            background-color: #e9ecef;
+            cursor: pointer;
+        }
+        
+        .file-list {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .navbar {
+            margin-bottom: 20px;
+            background-image: linear-gradient(135deg, #6e8efb, #a777e3);
+        }
+
+        .navbar-brand, .nav-link {
+            color: white !important;
+        }
+
+        .navbar-brand {
+            font-size: 1.8rem;
+            font-weight: 700;
+            padding: 0.5rem 1rem;
+            letter-spacing: 0.5px;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .navbar-nav .nav-item {
+            margin: 0 5px;
+        }
+
+        .navbar-nav .nav-link {
+            color: white !important;
+            padding: 8px 15px !important;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .navbar-nav .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .navbar-nav .nav-item.active .nav-link {
+            background-color: rgba(255, 255, 255, 0.3);
+            font-weight: 600;
+        }
+
+        /* アクティブなリンクのインジケーター */
+        .navbar-nav .nav-item.active .nav-link:after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 3px;
+            background-color: white;
+            border-radius: 3px;
+        }
+
+        /* タブのようなデザインオプション */
+        .mode-tabs {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            padding: 5px;
+            background-color: #f0f4f8;
+            border-radius: 8px;
+        }
+
+        .mode-tabs .mode-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 500;
+            color: #555;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            margin: 0 5px;
+        }
+
+        .mode-tabs .mode-tab:hover {
+            background-color: #e0e6ec;
+        }
+
+        .mode-tabs .mode-tab.active {
+            background-image: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .upload-zone.highlight {
+            background-color: #e2e6ea;
+            border-color: #a777e3;
+            box-shadow: 0 0 10px rgba(167, 119, 227, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        /* ナビゲーションバーのレスポンシブ対応 */
+        @media (max-width: 991px) {
+            .navbar-toggler {
+                display: block;
+                border-color: rgba(255, 255, 255, 0.5);
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            
+            .navbar-toggler-icon {
+                background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+            }
+            
+            .navbar .mode-tabs {
+                margin-left: 0;
+                width: 100%;
+                flex-direction: column;
+                align-items: flex-start;
+                margin-top: 10px;
+            }
+            
+            .navbar .mode-tab {
+                width: 100%;
+                margin: 5px 0;
+                padding: 10px 15px;
+            }
+            
+            .navbar .mode-tab.active:after {
+                display: none;
+            }
+            
+            .navbar .mode-tab.active {
+                background-color: rgba(255, 255, 255, 0.3);
+                border-left: 4px solid white;
+            }
+        }
+
+
+    </style>
+    
+    <script>
+        function showFiles() {
+            var input = document.getElementById('fileInput');
+            var fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+            
+            if (input.files.length > 0) {
+                document.getElementById('fileCount').textContent = input.files.length + ' files selected';
+                
+                for (var i = 0; i < input.files.length; i++) {
+                    var fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.textContent = input.files[i].name;
+                    fileList.appendChild(fileItem);
+                }
+                
+                document.getElementById('submitBtn').disabled = false;
+            } else {
+                document.getElementById('fileCount').textContent = 'No files selected';
+                document.getElementById('submitBtn').disabled = true;
+            }
+        }
+        
+        function clickFileInput() {
+            document.getElementById('fileInput').click();
+        }
+        
+        function showSpinner() {
+            document.getElementById('uploadForm').style.display = 'none';
+            document.getElementById('loading-spinner').style.display = 'block';
+        }
+
+        function animateDots() {
+            const dotElement = document.querySelector('.dot-animation');
+            if (!dotElement) return;
+            
+            let dots = '';
+            let count = 0;
+            
+            setInterval(() => {
+                count = (count + 1) % 4;
+                dots = '.'.repeat(count);
+                dotElement.textContent = dots;
+            }, 500);
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('uploadForm');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    const fileInput = document.getElementById('fileInput');
+                    
+                    if (fileInput.files.length === 0) {
+                        alert("Please select at least one file.");
+                        e.preventDefault();
+                        return false;
+                    }
+                    
+                    showSpinner();
+                    animateDots();
+                    return true;
+                });
+            }
+            const uploadZone = document.querySelector('.upload-zone');
+            const fileInput = document.getElementById('fileInput');
+            
+            if (uploadZone && fileInput) {
+                // ドラッグアンドドロップのイベントハンドラーを追加
+                ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                    uploadZone.addEventListener(eventName, preventDefaults, false);
+                });
+                
+                function preventDefaults(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                
+                // ドラッグオーバー時のスタイル変更
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    uploadZone.addEventListener(eventName, highlight, false);
+                });
+                
+                ['dragleave', 'drop'].forEach(eventName => {
+                    uploadZone.addEventListener(eventName, unhighlight, false);
+                });
+                
+                function highlight() {
+                    uploadZone.classList.add('highlight');
+                }
+                
+                function unhighlight() {
+                    uploadZone.classList.remove('highlight');
+                }
+                
+                // ドロップ時の処理
+                uploadZone.addEventListener('drop', function(e) {
+                    const dt = e.dataTransfer;
+                    if (dt.files && dt.files.length > 0) {
+                        // FileList オブジェクトを直接割り当てられない場合の対応
+                        // 新しい FormData オブジェクトを作成
+                        const dataTransfer = new DataTransfer();
+                        
+                        // ドロップされた各ファイルを DataTransfer に追加
+                        Array.from(dt.files).forEach(file => {
+                            dataTransfer.items.add(file);
+                        });
+                        
+                        // fileInput の files プロパティに DataTransfer のファイルを設定
+                        fileInput.files = dataTransfer.files;
+                        
+                        // ファイル一覧を表示する関数を呼び出し
+                        showFiles();
+                    }
+                }, false);
+            }
+
+        });
+    </script>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">Auto Error Analyzer</a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <!-- mode-tabsにml-autoクラスを追加し、右寄せに -->
+                <div class="mode-tabs ml-auto">
+                    <a href="/" class="mode-tab {% if request.path == '/' %}active{% endif %}">
+                        <i class="fas fa-file mr-2"></i>Single File
+                    </a>
+                    <a href="/batch" class="mode-tab {% if request.path == '/batch' %}active{% endif %}">
+                        <i class="fas fa-copy mr-2"></i>Multiple Files
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h4 class="mt-4 mb-4 text-center">Multiple Files Mode</h4>
+        
+        {% if error %}
+        <div class="alert alert-danger">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        {% if result %}
+        <div class="alert alert-success">
+            <h4>Processing Complete!</h4>
+            <p>Successfully processed {{ file_count }} files. The results have been compiled into a CSV file.</p>
+            <a href="{{ url_for('batch_download') }}" class="btn btn-primary">Download Results</a>
+        </div>
+        {% else %}
+        
+        <div id="loading-spinner" style="display: none; text-align: center; margin-top: 50px;">
+            <div class="cool-spinner">
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+            </div>
+            <div style="margin-top: 25px; color: #333; font-family: 'Poppins', sans-serif; font-weight: 500; letter-spacing: 1px;">
+                Processing files<span class="dot-animation">...</span>
+            </div>
+            <p class="text-muted mt-3">This may take several minutes depending on the number and size of files.</p>
+        </div>
+        
+        <form id="uploadForm" method="POST" action="/batch" enctype="multipart/form-data">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Upload Text Files</h5>
+                    <p class="card-text">Select multiple .txt or .docx files for batch analysis.</p>
+                    
+                    <input type="file" id="fileInput" name="files[]" multiple accept=".txt,.docx" style="display: none;" onchange="showFiles()">
+                    
+                    <div class="upload-zone" onclick="clickFileInput()">
+                        <i class="fa fa-cloud-upload fa-3x mb-3"></i>
+                        <p>Click to select files or drag and drop files here</p>
+                        <p id="fileCount" class="text-muted">No files selected</p>
+                    </div>
+                    
+                    <div id="fileList" class="file-list"></div>
+                    
+                    <div class="text-center">
+                        <button type="submit" id="submitBtn" class="btn btn-primary" onclick="return verify();">
+                        Process Files
+                     </button>
+                    </div>
+
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h5 class="card-title">Batch Processing Instructions</h5>
+                    <ol>
+                        <li>Select multiple .txt or .docx files to analyze.</li>
+                        <li>Click "Process Files" to start batch analysis.</li>
+                        <li>Wait for processing to complete (this may take several minutes).</li>
+                        <li>Download the CSV file with analysis results.</li>
+                    </ol>
+                    <p class="text-muted">Note: Each file will be analyzed for fluency, complexity, and accuracy metrics.</p>
+                </div>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+    
+    <footer class="mt-5 text-center py-3">
+        <div class="container">
+            <small style="display:block; line-height:1.2;">Version 1.2 (May 1, 2025)</small>
+            <small style="display:block; line-height:1.2;">
+                <a href="https://osf.io/jyf3r/" class="plain-link" target="_blank" rel="noopener noreferrer" style="color:currentColor; text-decoration:none;">
+                    Code
+                </a>
+            </small>
+            <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">
+                <img src="https://creativecommons.jp/wp-content/uploads/2015/04/by-nc-sa.png?w=75">
+            </a>
+        </div>
+    </footer>
+</body>
+</html>

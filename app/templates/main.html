@@ -8,8 +8,9 @@
     <title>Auto Error Analyzer</title>
     <!-- Bootstrap -->
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
-        <!-- css -->
+    <!-- css -->
     <link href="/static/css/style.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <!-- favicon -->
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <!-- javascript -->
@@ -171,6 +172,128 @@
             border: 1px solid #28a745;
         }
 
+        .navbar {
+            margin-bottom: 20px;
+            background-image: linear-gradient(135deg, #6e8efb, #a777e3);
+        }
+
+        .navbar-brand, .nav-link {
+            color: white !important;
+        }
+
+        .navbar-brand {
+            font-size: 1.8rem;
+            font-weight: 700;
+            padding: 0.5rem 1rem;
+            letter-spacing: 0.5px;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .navbar-nav .nav-item {
+            margin: 0 5px;
+        }
+
+        .navbar-nav .nav-link {
+            color: white !important;
+            padding: 8px 15px !important;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .navbar-nav .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .navbar-nav .nav-item.active .nav-link {
+            background-color: rgba(255, 255, 255, 0.3);
+            font-weight: 600;
+        }
+
+        /* アクティブなリンクのインジケーター */
+        .navbar-nav .nav-item.active .nav-link:after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 3px;
+            background-color: white;
+            border-radius: 3px;
+        }
+
+        /* タブのようなデザインオプション */
+        .mode-tabs {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            padding: 5px;
+            background-color: #f0f4f8;
+            border-radius: 8px;
+        }
+
+        .mode-tabs .mode-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 500;
+            color: #555;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            margin: 0 5px;
+        }
+
+        .mode-tabs .mode-tab:hover {
+            background-color: #e0e6ec;
+        }
+
+        .mode-tabs .mode-tab.active {
+            background-image: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+        }
+
+
+        /* ナビゲーションバーのレスポンシブ対応 */
+        @media (max-width: 991px) {
+            .navbar-toggler {
+                display: block;
+                border-color: rgba(255, 255, 255, 0.5);
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            
+            .navbar-toggler-icon {
+                background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+            }
+            
+            .navbar .mode-tabs {
+                margin-left: 0;
+                width: 100%;
+                flex-direction: column;
+                align-items: flex-start;
+                margin-top: 10px;
+            }
+            
+            .navbar .mode-tab {
+                width: 100%;
+                margin: 5px 0;
+                padding: 10px 15px;
+            }
+            
+            .navbar .mode-tab.active:after {
+                display: none;
+            }
+            
+            .navbar .mode-tab.active {
+                background-color: rgba(255, 255, 255, 0.3);
+                border-left: 4px solid white;
+            }
+        }
+
+
     </style>
 
     <script>
@@ -323,8 +446,27 @@
 
 
 <body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">Auto Error Analyzer</a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="mode-tabs ml-auto">
+                    <a href="/" class="mode-tab {% if request.path == '/' %}active{% endif %}">
+                        <i class="fas fa-file mr-2"></i>Single File
+                    </a>
+                    <a href="/batch" class="mode-tab {% if request.path == '/batch' %}active{% endif %}">
+                        <i class="fas fa-copy mr-2"></i>Multiple Files
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
     <center>
-        <h1>Auto Error Analyzer</h1>
+        <h4 class="mt-4 mb-4">Single File Mode</h4>
         <div class="form-group">
             <form method="POST" action="/" enctype="multipart/form-data">
                 <textarea name="text" id="text" cols="90" rows="13" placeholder="Type or select a file...">{{texts}}</textarea><br>
